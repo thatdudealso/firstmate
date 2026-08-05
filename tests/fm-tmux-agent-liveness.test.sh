@@ -144,6 +144,24 @@ wait_for_state "$SESSION:agent" alive \
   || fail "a running harness-named foreground process must classify alive"
 pass "tmux liveness: a harness-named foreground process classifies alive"
 
+# Vibe's entry point is a Python script, so neither the foreground command nor
+# argv[0] names the harness. Its script path in the foreground process group's
+# complete arguments is the required third evidence source.
+PYTHON_BIN=$(command -v python3 2>/dev/null || true)
+if [ -n "$PYTHON_BIN" ]; then
+  cat > "$LAB/bin/vibe" <<'PY'
+import time
+while True:
+    time.sleep(60)
+PY
+  new_window vibe-python "$PYTHON_BIN" "$LAB/bin/vibe"
+  wait_for_state "$SESSION:vibe-python" alive \
+    || fail "a Python Vibe launcher must classify alive from its script path"
+  pass "tmux liveness: a Python Vibe launcher classifies alive from its script path"
+else
+  echo "skip: python3 not found, so the Vibe launcher liveness case cannot run"
+fi
+
 # --- a version name blinds one source ---------------------------------------
 # Giving a genuine harness-named executable the version-string argv[0] that
 # Claude Code 2.1.220 reports drives the two sources apart on both supported

@@ -223,6 +223,8 @@ test_claude_busy_signature_uses_real_capture_shapes() {
   pane_busy cross codex && fail "Codex must ignore OpenCode's interrupt footer"
   printf 'Ctrl+c:cancel\n' > "$composer"
   pane_busy cross opencode && fail "OpenCode must ignore Grok's cancel footer"
+  printf 'Generating… (22s Esc/Ctrl+C to interrupt)\n' > "$composer"
+  pane_busy cross opencode && fail "OpenCode must ignore Vibe's generating footer"
   printf 'esc interrupt\n' > "$composer"
   pane_busy cross pi && fail "Pi must ignore OpenCode's interrupt footer"
   printf 'esc to interrupt\n' > "$composer"
@@ -245,6 +247,8 @@ test_claude_busy_signature_uses_real_capture_shapes() {
   pane_busy unknown kimi && fail "Kimi must ignore Pi's Working footer"
   printf 'Ctrl+c:cancel\n' > "$composer"
   pane_busy unknown kimi && fail "idle Kimi must ignore Grok's cancel footer"
+  printf 'Generating… (22s Esc/Ctrl+C to interrupt)\n' > "$composer"
+  pane_busy unknown kimi && fail "Kimi must ignore Vibe's generating footer"
 
   # Older Claude Code and the existing Pi and Grok signatures remain unchanged.
   printf 'esc to interrupt\n' > "$composer"
@@ -254,6 +258,8 @@ test_claude_busy_signature_uses_real_capture_shapes() {
   pane_busy pi-signed pi-signed || fail "pi-signed should share Pi's exact Working footer"
   printf 'Ctrl+c:cancel\n' > "$composer"
   pane_busy grok grok || fail "Grok cancel footer should be busy"
+  printf 'Generating… (22s Esc/Ctrl+C to interrupt)\n' > "$composer"
+  pane_busy vibe vibe || fail "Vibe generating footer should be busy"
   pass "fm_pane_is_busy: Claude spinner is scoped, multi-frame, and backward-compatible"
 }
 

@@ -83,7 +83,7 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi)
+#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi|vibe)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. pi-signed launches that exact executable name from PATH and
@@ -783,7 +783,7 @@ FIRSTMATE_HOME=
 
 if [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-    ''|claude|codex|opencode|pi|pi-signed|grok|kimi)
+    ''|claude|codex|opencode|pi|pi-signed|grok|kimi|vibe)
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -849,6 +849,12 @@ launch_template() {
     # Its turn-end signal is a globally configured Stop hook plus a guarded
     # per-task worktree token, so no launch placeholder belongs here.
     kimi) printf '%s' '__KIMIBIN__ __MODELFLAG__--auto' ;;
+    # Vibe accepts a positional prompt in its interactive TUI. --trust is still
+    # required even though Vibe 2.24.0 displays its own first-run trust dialog;
+    # the verified dialog handler below accepts that explicit launch intent.
+    # Update checks present a selectable update dialog, so disable them only for
+    # this spawned process rather than changing the captain's Vibe configuration.
+    vibe) printf '%s' 'VIBE_ENABLE_UPDATE_CHECKS=false vibe --trust --auto-approve "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     *) return 1 ;;
   esac
 }
@@ -898,6 +904,14 @@ esac
 # retain the literal name in the launch command and task metadata.
 if [ "$HARNESS" = pi-signed ] && ! command -v pi-signed >/dev/null 2>&1; then
   echo "error: pi-signed executable not found on PATH; install the signed Pi wrapper or select a different verified harness" >&2
+  exit 1
+fi
+if [ "$HARNESS" = vibe ] && ! command -v vibe >/dev/null 2>&1; then
+  echo "error: vibe executable not found on PATH; install Mistral Vibe or select a different verified harness" >&2
+  exit 1
+fi
+if [ "$KIND" = secondmate ] && [ "$HARNESS" = vibe ]; then
+  echo "error: vibe is verified for crewmate and scout launches only; secondmate and remote-secondmate dispatch remain unverified" >&2
   exit 1
 fi
 
@@ -1693,6 +1707,43 @@ kimi_spawn_fail() {  # <detail>
   echo "error: $1; inspect window $T" >&2
 }
 
+vibe_capture() {
+  fm_backend_capture "$BACKEND" "$T" 120 "$W" 2>/dev/null || true
+}
+
+# Vibe 2.24.0 presents its own project-trust chooser on an untrusted worktree
+# even when launched with --trust. The explicit --trust launch flag authorizes
+# accepting the chooser's already-selected "Trust folder" option. Do not send a
+# blind Enter: require the exact dialog title and selected action first. A Vibe
+# update dialog is a separate selectable UI and must never receive this key.
+vibe_wait_for_ready() {
+  local pane i=0 accepted_trust=0 max=${FM_VIBE_READY_POLLS:-60}
+  local interval=${FM_VIBE_POLL_INTERVAL:-0.5}
+  while [ "$i" -lt "$max" ]; do
+    pane=$(vibe_capture)
+    if printf '%s\n' "$pane" | grep -Fq 'A new Vibe release is available'; then
+      return 2
+    fi
+    if printf '%s\n' "$pane" | grep -Fq 'Trust this folder?' \
+       && printf '%s\n' "$pane" | grep -Fq 'Trust folder'; then
+      if [ "$accepted_trust" = 0 ]; then
+        spawn_send_key "$T" Enter || return 1
+        accepted_trust=1
+      fi
+    elif printf '%s\n' "$pane" | grep -Fq 'Mistral Vibe v'; then
+      return 0
+    fi
+    i=$((i + 1))
+    [ "$i" -ge "$max" ] || sleep "$interval"
+  done
+  return 1
+}
+
+vibe_spawn_fail() {  # <detail>
+  printf 'failed: %s\n' "$1" >> "$STATE/$ID.status"
+  echo "error: $1; inspect window $T" >&2
+}
+
 if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
   spawn_send_text_line "$WT_TARGET" 'treehouse get'
 
@@ -2146,6 +2197,19 @@ if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
   spawn_herdr_presentation_order_lock_release
 fi
 spawn_send_key "$T" Enter
+if [ "$HARNESS" = vibe ]; then
+  if vibe_wait_for_ready; then
+    :
+  else
+    vibe_ready_status=$?
+    if [ "$vibe_ready_status" -eq 2 ]; then
+      vibe_spawn_fail "vibe showed an update dialog despite VIBE_ENABLE_UPDATE_CHECKS=false"
+    else
+      vibe_spawn_fail "vibe did not show its verified ready signal after launch"
+    fi
+    exit 1
+  fi
+fi
 if [ "$HARNESS" = kimi ]; then
   if ! kimi_wait_for_ready; then
     kimi_spawn_fail "kimi did not show a verified ready signal before brief delivery"

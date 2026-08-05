@@ -160,7 +160,7 @@ fm_backend_tmux_classify_process_name() {  # <path> [argv0] -> agent|shell|other
   base=${path##*/}
   base=${base#-}
   case "$base" in
-    *claude*|*codex*|*opencode*|*grok*|*kimi*|pi|pi-signed|pi-launcher|Pi) printf 'agent' ;;
+    *claude*|*codex*|*opencode*|*grok*|*kimi*|vibe|pi|pi-signed|pi-launcher|Pi) printf 'agent' ;;
     zsh|bash|sh|dash|ash|ksh|mksh|tcsh|csh|fish) printf 'shell' ;;
     *)
       if fm_harness_path_name "$path" >/dev/null || fm_harness_path_name "$argv0" >/dev/null; then
@@ -224,6 +224,23 @@ fm_backend_tmux_foreground_argv0s() {  # <target>
       done
 }
 
+# fm_backend_tmux_foreground_process_args: the foreground process group's
+# kernel command plus full argument string. Interpreted harness launchers such
+# as Vibe report only Python as their command, so recovery also needs the script
+# path while retaining the foreground-process-group safety boundary.
+fm_backend_tmux_foreground_process_args() {  # <target> -> "<comm><TAB><args>"
+  local target=$1 tty pid pgid tpgid comm args
+  tty=$(tmux display-message -p -t "$target" '#{pane_tty}' 2>/dev/null) || return 0
+  [ -n "$tty" ] || return 0
+  LC_ALL=C ps -t "${tty#/dev/}" -o pid=,pgid=,tpgid=,comm= 2>/dev/null \
+    | while read -r pid pgid tpgid comm; do
+        [ -n "$comm" ] || continue
+        [ "$pgid" = "$tpgid" ] || continue
+        args=$(LC_ALL=C ps -p "$pid" -o args= 2>/dev/null) || continue
+        printf '%s\t%s\n' "$comm" "$args"
+      done
+}
+
 # fm_backend_tmux_agent_state: recovery-grade harness-agent state for one
 # recorded target. See bin/fm-backend.sh's fm_backend_agent_state for the
 # shared state vocabulary and docs/tmux-backend.md "Agent liveness probe" for
@@ -242,7 +259,7 @@ fm_backend_tmux_foreground_argv0s() {  # <target>
 # distinguish a truly idle pane from a rewritten process title.
 fm_backend_tmux_agent_state() {  # <target>
   local target=$1 comm session window windows inventory_status
-  local foreground argv0s name fg_seen=0 fg_shell=0 fg_other=0
+  local foreground argv0s process_args name proc_comm proc_args fg_seen=0 fg_shell=0 fg_other=0
   case "$target" in
     *:*:*|'':*|*:'') printf 'unreadable'; return 0 ;;
     *:*) ;;
@@ -293,6 +310,17 @@ EOF
     fi
   done <<EOF
 $argv0s
+EOF
+
+  process_args=$(fm_backend_tmux_foreground_process_args "$target")
+  while IFS=$'\t' read -r proc_comm proc_args; do
+    [ -n "$proc_comm" ] || continue
+    if fm_harness_process_matches "$proc_comm" "$proc_args"; then
+      printf 'alive'
+      return 0
+    fi
+  done <<EOF
+$process_args
 EOF
 
   comm=$(fm_backend_tmux_current_command "$target") || {

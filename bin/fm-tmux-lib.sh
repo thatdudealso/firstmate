@@ -89,6 +89,10 @@ FM_TMUX_OPENCODE_BUSY_REGEX_DEFAULT='esc interrupt'
 FM_TMUX_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
 FM_TMUX_GROK_BUSY_REGEX_DEFAULT='Ctrl\+c:cancel'
 FM_TMUX_KIMI_BUSY_REGEX_DEFAULT='^[[:space:]]*(🌑|🌒|🌓|🌔|🌕|🌖|🌗|🌘)[[:space:]]+·[[:space:]]+'
+# Vibe 2.24.0 renders this complete ASCII key hint only while generating. The
+# spinner and typographic ellipsis vary by frame/font, so the stable interrupt
+# text is the deliberately narrow matcher.
+FM_TMUX_VIBE_BUSY_REGEX_DEFAULT='Generating.*Esc/Ctrl\+C to interrupt'
 
 fm_busy_lines_match() {  # [harness]
   local harness=${1:-} lines regex
@@ -103,6 +107,7 @@ fm_busy_lines_match() {  # [harness]
       pi|pi-signed) regex=$FM_TMUX_PI_BUSY_REGEX_DEFAULT ;;
       grok) regex=$FM_TMUX_GROK_BUSY_REGEX_DEFAULT ;;
       kimi) regex=$FM_TMUX_KIMI_BUSY_REGEX_DEFAULT ;;
+      vibe) regex=$FM_TMUX_VIBE_BUSY_REGEX_DEFAULT ;;
       '') regex=$FM_TMUX_BUSY_REGEX_DEFAULT ;;
       *)
         # A supplied harness must never borrow another harness's signature.
@@ -302,6 +307,47 @@ EOF
   return 1
 }
 
+# fm_tmux_vibe_composer_state: Vibe's composer is not a bordered box. Its bare
+# `>` prompt is enclosed by a named upper rule and an all-rule lower boundary,
+# which is enough structural proof to distinguish it from a dead shell prompt.
+# A partially rendered, wrapped, or otherwise novel Vibe composer intentionally
+# stays unknown rather than relaxing the global bare-prompt safety rule.
+fm_tmux_vibe_composer_state() {  # <cursor-y> <plain-pane> <styled-pane>
+  local cy=$1 plain=$2 styled=$3 row=0 top=-1 candidate=0 line trimmed raw
+  while IFS= read -r line; do
+    trimmed="${line#"${line%%[![:space:]]*}"}"
+    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+    if [ "$row" -lt "$cy" ]; then
+      if printf '%s\n' "$trimmed" | grep -Eq '^─{10,}[[:space:]]+[^[:space:]─].*[[:space:]]+─+$'; then
+        top=$row
+      elif [ -n "$trimmed" ]; then
+        top=-1
+      fi
+    elif [ "$row" -eq "$cy" ]; then
+      if [ "$top" -ge 0 ] && [ $((row - top)) -le 2 ] \
+         && printf '%s\n' "$trimmed" | grep -Eq '^>.*$'; then
+        candidate=1
+      else
+        return 1
+      fi
+    elif [ "$candidate" = 1 ]; then
+      if [ -z "$trimmed" ]; then
+        :
+      elif printf '%s\n' "$trimmed" | grep -Eq '^─{10,}$'; then
+        raw=$(printf '%s\n' "$styled" | sed -n "$((cy + 1))p")
+        fm_tmux_composer_row_state "$raw" 1 0
+        return 0
+      else
+        return 1
+      fi
+    fi
+    row=$((row + 1))
+  done <<EOF
+$plain
+EOF
+  return 1
+}
+
 # fm_tmux_composer_state classification contract:
 # A row is structural only when its first or last non-whitespace character is a
 # composer edge. A complete box has matching border families and bounded top and
@@ -320,6 +366,10 @@ fm_tmux_composer_state() {  # <target> -> empty|pending|pending-unproven|unknown
   case "$cy" in ''|*[!0-9]*) printf 'unknown'; return 0 ;; esac
   pane=$(tmux capture-pane -e -p -t "$target" -S 0 -E - 2>/dev/null) || { printf 'unknown'; return 0; }
   plain=$(printf '%s\n' "$pane" | fm_composer_strip_ansi)
+  if state=$(fm_tmux_vibe_composer_state "$cy" "$plain" "$pane"); then
+    printf '%s' "$state"
+    return 0
+  fi
   if box=$(fm_tmux_find_composer_box "$cy" "$plain"); then
     top=${box%% *}
     box=${box#* }
