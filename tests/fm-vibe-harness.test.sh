@@ -50,6 +50,9 @@ case "${1:-}" in
       trust)
         printf '%s\n' 'Trust this folder?' '› Trust folder     Don'\''t trust'
         ;;
+      untrusted)
+        printf '%s\n' 'Trust this folder?' '  Trust folder     › Don'\''t trust'
+        ;;
       update)
         printf '%s\n' 'A new Vibe release is available'
         ;;
@@ -143,6 +146,20 @@ test_vibe_update_dialog_refuses_without_pressing_enter() {
   pass "fm-spawn: Vibe update dialog fails closed without a blind Enter"
 }
 
+test_vibe_unselected_trust_dialog_refuses_without_pressing_enter() {
+  local id=voice-vibe-untrusted-z1 rec out rc
+  rec=$(make_case untrusted "$id")
+  read_case "$rec"
+  out=$(FM_FAKE_VIBE_DIALOG=untrusted run_spawn \
+    "$CASE_DIR" "$HOME_DIR" "$PROJ_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id")
+  rc=$?
+  [ "$rc" -ne 0 ] || fail "Vibe must not accept an unselected trust action"
+  assert_contains "$out" 'vibe did not show its verified ready signal' \
+    "Unselected Vibe trust dialog was not rejected"
+  [ ! -s "$CASE_DIR/key.log" ] || fail "Unselected Vibe trust dialog received Enter"
+  pass "fm-spawn: Vibe rejects an unselected trust action without pressing Enter"
+}
+
 test_vibe_busy_tail_is_harness_scoped() {
   local busy idle other
   busy=$(fm_busy_classify tmux fake:window vibe test "$TMP_ROOT" \
@@ -159,4 +176,5 @@ test_vibe_busy_tail_is_harness_scoped() {
 
 test_vibe_launch_accepts_trust_dialog_without_model_or_effort_flags
 test_vibe_update_dialog_refuses_without_pressing_enter
+test_vibe_unselected_trust_dialog_refuses_without_pressing_enter
 test_vibe_busy_tail_is_harness_scoped

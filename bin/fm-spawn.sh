@@ -1711,6 +1711,10 @@ vibe_capture() {
   fm_backend_capture "$BACKEND" "$T" 120 "$W" 2>/dev/null || true
 }
 
+vibe_trust_folder_is_selected() {  # <plain-pane-capture>
+  printf '%s\n' "$1" | grep -Eq '^[[:space:]]*›[[:space:]]+Trust folder([[:space:]]|$)'
+}
+
 # Vibe 2.24.0 presents its own project-trust chooser on an untrusted worktree
 # even when launched with --trust. The explicit --trust launch flag authorizes
 # accepting the chooser's already-selected "Trust folder" option. Do not send a
@@ -1725,7 +1729,7 @@ vibe_wait_for_ready() {
       return 2
     fi
     if printf '%s\n' "$pane" | grep -Fq 'Trust this folder?' \
-       && printf '%s\n' "$pane" | grep -Fq 'Trust folder'; then
+       && vibe_trust_folder_is_selected "$pane"; then
       if [ "$accepted_trust" = 0 ]; then
         spawn_send_key "$T" Enter || return 1
         accepted_trust=1
