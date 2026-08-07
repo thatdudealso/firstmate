@@ -1,6 +1,6 @@
 ---
 name: harness-adapters
-description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, and kimi.
+description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, kimi, and vibe.
 user-invocable: false
 metadata:
   internal: true
@@ -127,6 +127,7 @@ The supported launch-profile flags below are verified locally; each row records 
 | pi / pi-signed | `--model <model>` | `--thinking <low\|medium\|high\|xhigh\|max>` | Verified 2026-07-27 on Pi and pi-signed 0.82.0. Both expose the same accepted thinking levels and completed the same model-qualified max-thinking smoke. |
 | opencode | `--model <provider/model>` | none for firstmate's interactive launch | Verified on opencode 1.17.6. `opencode run` has `--variant`, but firstmate launches the interactive `opencode --prompt` path, which has no verified effort flag. |
 | kimi | `--model <model>` | none | Verified 2026-07-25 on Kimi Code CLI 0.29.1. |
+| vibe | none | none | Verified 2026-08-05 on Vibe 2.24.0. `vibe --help` exposes no `--model` or reasoning-effort flag, so requested profile axes remain metadata only. |
 
 The concrete `harness` field owns adapter identity independently of the model provider: `harness=pi` with `model=xai/grok-*` is Pi using xAI, not `harness=grok`, and does not require Grok CLI login; `harness=grok` remains the standalone Grok Build CLI adapter.
 No script resolves that split for you: establish which credential store a tuple reads from the discovery surfaces below plus `quota-axi auth --json`'s per-provider sources, and show that reasoning rather than inferring it from a harness, model, or source name.
@@ -144,6 +145,7 @@ Use the discovery surface in the current authenticated environment because suppo
 | pi / pi-signed | Run the selected executable as `<executable> --list-models [search]`; Pi's installed `docs/models.md` owns how built-in, extension-registered, and custom provider/model entries reach that list. |
 | grok | Run `grok models`, which lists the models available to the current Grok installation and account. |
 | kimi | Run `kimi provider list --json`, which lists the current provider and model configuration. |
+| vibe | No verified noninteractive model-listing surface. Do not select a model-qualified Vibe profile until a current authenticated Vibe discovery surface has been verified. |
 
 For an unfamiliar harness or model namespace, establish support and provider identity from that harness's authoritative CLI help, model listing, or current documentation rather than guessing from a name or prefix.
 A listing that reaches the account and does not contain the model is concrete evidence the model is unsupported: block that candidate and quote the result.
@@ -163,6 +165,7 @@ Natural language is acceptable if uncertain.
 - pi and pi-signed: no separate verified skill invocation beyond normal command behavior; use natural language if the exact skill command is uncertain.
 - grok: `/<skill>`, for example `/no-mistakes` (same form as claude). Verified end to end: grok discovers the user-level `no-mistakes` skill, `/no-mistakes` invokes it, and grok drives a real `no-mistakes axi run`. Like codex's `$`/`/` popups, typing `/<skill>` opens grok's slash-autocomplete, so a too-fast Enter selects the popup entry instead of sending, and for an argument-taking command (like `/no-mistakes`'s optional task-first argument) that first Enter only expands the popup selection into an argument-hint placeholder rather than submitting - a genuine second Enter is required (see the grok section below for the 2026-07-03 incident and fix). `fm_tmux_submit_core`'s retried Enter (used by `fm-send` on the tmux backend) handles this through the structural composer reader; the herdr backend needed a dedicated fix (`fm_backend_herdr_composer_state`, docs/herdr-backend.md) because its prior delta-based verification false-positived on that same popup-close content change.
 - kimi: `/<skill>`, for example `/no-mistakes`.
+- vibe: no verified skill-invocation form. Use a natural-language instruction.
 
 ## Submission acknowledgement hazards
 
@@ -309,7 +312,7 @@ For Grok's supported reasoning-effort values and omission behavior, see the [lau
 
 | Fact | Value |
 |---|---|
-| Busy state | The one remaining rendered-tail fallback, isolated to Grok until its structured lifecycle is live-verified: `Ctrl+c:cancel`, the mid-turn cancel hint shown in grok's keybind bar iff a turn is running. The idle bar shows only `Shift+Tab:mode │ Ctrl+.:shortcuts`. ASCII is matched rather than the braille spinner to avoid locale fragility. |
+| Busy state | One of two rendered-tail fallbacks, isolated to Grok until its structured lifecycle is live-verified: `Ctrl+c:cancel`, the mid-turn cancel hint shown in grok's keybind bar iff a turn is running. The idle bar shows only `Shift+Tab:mode │ Ctrl+.:shortcuts`. ASCII is matched rather than the braille spinner to avoid locale fragility. |
 | Exit command | `/exit` typed into the composer exits the TUI cleanly and prints `Resume this session with: grok --resume <session-id>`; `Ctrl+Q` double-press within 1000ms remains a fallback; `Ctrl+D` is the quit key in VS Code family terminals; `Ctrl+C` is the interrupt, not the exit. |
 | Interrupt | single `Ctrl+C` (cancels the current turn; the footer shows `Ctrl+c:cancel` mid-turn). `Esc` only moves focus to the scrollback, it does NOT interrupt. |
 | Skill invocation | `/<skill>` (e.g. `/no-mistakes`), same as claude. Opens a slash-autocomplete popup, so a too-fast Enter selects the popup entry instead of sending. For an argument-taking command that first Enter does not submit at all - it expands the selection into an argument-hint placeholder in the composer (e.g. `/compact` -> `/compact compaction instructions`, live-verified), leaving real text still sitting there unsubmitted; a genuine second Enter is required. `fm-send`'s retried Enter lands it on BOTH backends, but only because each backend's own submit-verification correctly recognizes that placeholder-filled text as still-pending - see the incident below. |
@@ -397,3 +400,27 @@ The delivery-only spinner match covers the full moon-phase glyph set rather than
 Each Kimi crew worktree receives a gitignored `.fm-kimi-turnend` token pointer, and the global hook touches that task's `state/<id>.turn-ended` only when the Stop payload's `cwd`, pointer, and registry entry all agree.
 A guarded silent hook cannot be verified from absence of effect, so prove invocation with an unguarded probe before concluding that the hook did not fire.
 The guarded turn-end signal remains a wake notification; standalone Kimi has no busy-state source until one is live-verified.
+
+## vibe (PROVISIONAL, mechanics VERIFIED 2026-08-05 on Vibe 2.24.0)
+
+Mistral Vibe CLI (`vibe`) is a verified Firstmate crew harness with a deliberately degraded supervision path.
+`bin/fm-spawn.sh` launches `VIBE_ENABLE_UPDATE_CHECKS=false vibe --trust --auto-approve "$(cat <brief>)"` in the task worktree.
+
+| Fact | Value |
+|---|---|
+| Launch | Interactive positional prompt with `--trust` and `--auto-approve`. `VIBE_ENABLE_UPDATE_CHECKS=false` suppresses Vibe's otherwise-selectable update dialog only for the spawned process. |
+| Autonomy | `--auto-approve`. This was observed on a Firstmate-supervised raw-launch lab. `--yolo` is an accepted alias but is not used. |
+| Trust dialog | Vibe 2.24.0 still displays `Trust this folder?` for a worktree containing `AGENTS.md` and `.agents/` despite `--trust`. Firstmate verifies that dialog and its selected `Trust folder` action before sending one Enter. It fails closed for an update dialog or an unrecognized startup screen. |
+| Busy state | Provisional Vibe-only rendered-tail fallback: `Generating.*Esc/Ctrl+C to interrupt`. The hint appeared only while a turn was generating in the supervised lab. `bin/fm-busy-lib.sh` reports `busy vibe-regex` or `idle vibe-regex`; no other harness may borrow it. |
+| Exit command | `/exit`, which returns the pane to its shell and prints continuation commands. |
+| Interrupt | Single `Ctrl+C`, observed to display `Interrupted · What should Vibe do instead?`. Escape was not credited as an interrupt. |
+| Resume | `vibe --continue` for the latest cwd session, or `vibe --resume <session-id>` using the id printed by `/exit`. |
+| Environment marker | None. The inspected Vibe Python child had only inherited configuration/credential values (`VIBE_HOME` when explicitly supplied and `MISTRAL_API_KEY`), neither of which identifies a Vibe harness. Detection relies on the `vibe` command or Python launcher ancestry. |
+| Composer | A bare `>` prompt bounded by Vibe's named upper rule and all-rule lower boundary. The tmux reader recognizes only that complete shape, so a bare shell `>` remains unsafe/unknown. |
+| Model and effort | No verified CLI profile flag. `vibe --help` has no `--model` or reasoning-effort flag, so Firstmate retains requested axes in task metadata and emits neither. |
+
+**Known gap - no native per-turn wake hook.**
+The Vibe 2.24.0 global `post_agent` hook surface was discovered, but trivial supervised interactive and programmatic turns did not complete during the verification lab, so its callback is not credited and Firstmate installs no Vibe hook or `.turn-ended` marker.
+Crewmates still append their required phase-change lines to `state/<id>.status`, which wakes Firstmate.
+The Vibe-only busy signature and stale-pane policy are the backstop when a worker misses that append.
+Treat this adapter as provisional until a real Firstmate-launched turn proves a native lifecycle callback, including normal completion and interruption behavior.

@@ -9,13 +9,14 @@
 # This file is sourced by scripts and has no side effects on source.
 
 # Known harness command names; extend when a new adapter is verified.
-FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^pi-signed$'
+FM_HARNESS_RE='claude|codex|opencode|grok|kimi|vibe|^pi$|^pi-signed$'
+FM_INTERPRETER_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^pi-signed$'
 
 # The same harnesses as exact executable names. Keep in sync with
 # FM_HARNESS_RE. Used only for the stricter path evidence below, where the
 # loose regex would also match ordinary firstmate paths such as
 # bin/fm-claude-stop-autoarm.sh.
-FM_HARNESS_NAMES=(claude codex opencode grok kimi pi-signed pi)
+FM_HARNESS_NAMES=(claude codex opencode grok kimi vibe pi-signed pi)
 
 # Print the exact harness name carried by executable path $1 - its own basename
 # or any directory component - or return 1.
@@ -64,8 +65,11 @@ fm_harness_process_matches() {  # <comm> <args>
   fi
   # Bare interpreter (e.g. node): match the harness name in its script path.
   case "$comm" in
-    *node*|*python*)
-      if printf '%s' "$args" | grep -qE "$FM_HARNESS_RE"; then
+    *node*|*python*|*Node*|*Python*)
+      case "$args" in
+        *[[:space:]]*/vibe[[:space:]]*|*/vibe) return 0 ;;
+      esac
+      if printf '%s' "$args" | grep -qE "$FM_INTERPRETER_HARNESS_RE"; then
         case "$args" in *claude*) FM_HARNESS_IS_CLAUDE=1 ;; esac
         return 0
       fi

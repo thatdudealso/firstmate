@@ -570,6 +570,33 @@ test_non_bordered_interior_edges_are_pending() {
   pass "fm_tmux_composer_state: interior edge glyphs retain non-bordered fallback"
 }
 
+test_vibe_structural_composer_is_safe_and_sendable() {
+  local dir fb capture out
+  dir="$TMP_ROOT/vibe-composer"; mkdir -p "$dir"
+  fb=$(make_fake_tmux "$dir")
+  capture="$dir/styled.txt"
+  printf '%s\n' \
+    '────────────────────────────────────────────────────────────────────── default ─' \
+    '>' \
+    '' \
+    '────────────────────────────────────────────────────────────────────────────────' \
+    '~/.treehouse/firstmate 0/200k tokens (0%%)' > "$capture"
+  out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = empty ] || fail "Vibe's structural bare composer should be empty, got '$out'"
+
+  sed '2s/>$/> captain message/' "$capture" > "$dir/pending.txt"
+  out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$dir/pending.txt" FM_FAKE_CY=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = pending ] || fail "Vibe's structural typed composer should be pending, got '$out'"
+
+  printf '>\n' > "$dir/bare.txt"
+  out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$dir/bare.txt" FM_FAKE_CY=0 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = unknown ] || fail "a bare Vibe-like shell prompt must remain unknown, got '$out'"
+  pass "fm_tmux_composer_state: Vibe's bounded bare composer is safe without weakening shell-prompt safety"
+}
+
 # --- fm-peek.sh stays escape-free (LLM-facing path) -------------------------
 
 test_peek_output_is_escape_free() {
@@ -625,4 +652,5 @@ test_fallback_capture_race_with_edge_is_unknown
 test_legitimate_empty_routes_remain_empty
 test_non_bordered_composer_uses_compatibility_fallback
 test_non_bordered_interior_edges_are_pending
+test_vibe_structural_composer_is_safe_and_sendable
 test_peek_output_is_escape_free

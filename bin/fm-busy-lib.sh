@@ -39,7 +39,7 @@
 #   fm-interrupt     a firstmate-controlled interruption of the worker
 #   fm-recovery      a documented recovery reset after relaunch
 # Classifier-only sources (never written into a record):
-#   endpoint-gone, herdr-native, grok-regex, missing, malformed,
+#   endpoint-gone, herdr-native, grok-regex, vibe-regex, missing, malformed,
 #   gen-mismatch, source-mismatch, kimi-unverified, codex-unverified,
 #   capture-failed, no-target
 #
@@ -50,13 +50,12 @@
 #   3. a valid, gen-matching, source-trusted record -> its state and source
 #   4. no record at all: herdr's native busy verdict is trusted as busy
 #      (generation state is sufficient for busy, not for idle), then the
-#      Grok-only temporary regex fallback classifies a grok task from its
+#      Grok- or Vibe-specific temporary regex fallback classifies that task from its
 #      rendered tail, then unknown missing
 #   5. malformed, stale, or untrusted records -> unknown, never a fallback
-# The Grok arm is the ONLY rendered-text classification that survives the
-# redesign, because Grok's structured lifecycle was not credited-live-verified
-# in the approved audit; it is scoped to harness=grok and can never classify
-# another adapter. The delivery guards in bin/fm-tmux-lib.sh match rendered
+# The Grok and Vibe arms are the only rendered-text classifications that survive
+# the redesign, because neither CLI has a credited live lifecycle source. Each is
+# scoped to its recorded harness and can never classify another adapter. The delivery guards in bin/fm-tmux-lib.sh match rendered
 # footers for submit acknowledgement and away-mode supervisor injection only;
 # neither is a recorded worker state source.
 #
@@ -161,8 +160,8 @@ fm_busy_current_gen() {  # <state-dir> <id>
 # fm_busy_sources_for_harness: the semantic sources trusted to classify a
 # task recorded with <harness>. One line, space-separated, possibly empty.
 # The firstmate-owned sources are appended for every converted adapter.
-# Grok deliberately trusts nothing: it has no semantic writer yet, and its
-# temporary rendered-tail fallback lives in the classifier, not in records.
+# Grok and Vibe deliberately trust nothing: neither has a semantic writer yet,
+# and their temporary rendered-tail fallbacks live in the classifier, not records.
 fm_busy_sources_for_harness() {  # <harness>
   local adapter=
   case "${1:-}" in
@@ -255,6 +254,15 @@ fm_busy_grok_tail_busy() {
     | grep -qiE "${FM_BUSY_REGEX:-${FM_TMUX_GROK_BUSY_REGEX_DEFAULT:-Ctrl\\+c:cancel}}"
 }
 
+# fm_busy_vibe_tail_busy: Vibe's provisional rendered-tail fallback. Vibe 2.24.0
+# shows the Esc/Ctrl+C hint only while generating. It has no empirically proven
+# lifecycle callback, so this is intentionally classifier-only and never arms a
+# semantic busy record.
+fm_busy_vibe_tail_busy() {
+  grep -v '^[[:space:]]*$' | tail -12 \
+    | grep -qiE "${FM_BUSY_REGEX:-${FM_TMUX_VIBE_BUSY_REGEX_DEFAULT:-Generating.*Esc/Ctrl\\+C to interrupt}}"
+}
+
 # fm_busy_classify: semantic classification for a task whose endpoint the
 # caller has already established as present. Prints "<verdict> <source>":
 # busy|idle|unknown plus the producing source (see header). Never probes
@@ -324,6 +332,25 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
         printf 'busy grok-regex'
       else
         printf 'idle grok-regex'
+      fi
+      return 0
+      ;;
+    vibe*)
+      if [ -z "$tail40" ]; then
+        if command -v fm_backend_capture >/dev/null 2>&1; then
+          tail40=$(fm_backend_capture "$backend" "$target" 40 2>/dev/null) || {
+            printf 'unknown capture-failed'
+            return 0
+          }
+        else
+          printf 'unknown capture-failed'
+          return 0
+        fi
+      fi
+      if printf '%s' "$tail40" | fm_busy_vibe_tail_busy; then
+        printf 'busy vibe-regex'
+      else
+        printf 'idle vibe-regex'
       fi
       return 0
       ;;
