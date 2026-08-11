@@ -580,7 +580,7 @@ test_vibe_structural_composer_is_safe_and_sendable() {
     '>' \
     '' \
     '────────────────────────────────────────────────────────────────────────────────' \
-    '~/.treehouse/firstmate 0/200k tokens (0%%)' > "$capture"
+    "$HOME/.treehouse/firstmate 0/200k tokens (0%%)" > "$capture"
   out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
     fm_tmux_composer_state "fakepane")
   [ "$out" = empty ] || fail "Vibe's structural bare composer should be empty, got '$out'"
