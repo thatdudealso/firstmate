@@ -2349,4 +2349,4 @@ fi
 echo "teardown $ID complete (window $T, worktree $WT)"
 backlog_refresh_reminder
 # Optional crew-board backlog re-import after completion; never blocks cleanup when absent.
-"$FM_ROOT/bin/fm-board.sh" sync || true
+"$FM_ROOT/bin/fm-board.sh" sync >&2 || true

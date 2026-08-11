@@ -134,10 +134,10 @@ fi
 BIN=$(resolve_bin)
 BOARD=$(resolve_board)
 require_bin "$BIN"
-require_board "$BOARD"
 
 PASS_ARGS=("$@")
 if ! args_have_board_flag "${PASS_ARGS[@]}"; then
+  require_board "$BOARD"
   PASS_ARGS+=(--board "$BOARD")
 fi
 
