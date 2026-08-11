@@ -277,7 +277,7 @@ Spawn only through `bin/fm-spawn.sh` after the profile and backend checks in sec
 The spawn must resolve a genuine isolated task worktree distinct from the primary checkout; a failed isolation assertion stops the task.
 After spawning, confirm the worker is processing the brief, handle any trust dialog through `harness-adapters`, and record ship or scout work as under way.
 A persistent secondmate is recorded in the secondmate registry and runtime state, never as a backlog work item.
-Every agent keeps its crew-board ticket current through `bin/fm-board.sh`; use the message board for cross-agent questions.
+Every ship and scout worker keeps its crew-board ticket current through `bin/fm-board.sh`; use the message board for cross-agent questions.
 Board availability is optional: when the host copy or fleet board is absent, fleet work continues without that surface.
 
 Steer a worker with short single-line messages through fail-closed `fm-send`; put long instructions in a file.
