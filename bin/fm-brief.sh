@@ -54,6 +54,9 @@
 # it carries the AGENTS.md authoring bar (widely useful knowledge only, pointers
 # over copied detail) and has the crewmate add the fm-ensure-agents-md.sh
 # self-governance section when a touched project AGENTS.md lacks it.
+# Ship and scout briefs include a short crew-board section pointing at
+# bin/fm-board.sh: keep the imported tasks-axi ticket (source.key id:<task-id>)
+# current, and use the message board for cross-agent questions (AGENTS.md section 7).
 # Refuses to overwrite an existing brief.
 set -eu
 
@@ -297,6 +300,15 @@ EOF
 HERDR_SECTION=${HERDR_SECTION%$'\n'}
 fi
 
+BOARD_HELPER="$FM_ROOT/bin/fm-board.sh"
+IFS= read -r -d '' CREWBOARD_SECTION <<EOF || true
+# Crew board
+Keep this task's fleet board ticket current via \`$BOARD_HELPER\` (captain standing rule: every agent uses the crew board for tickets and messages).
+Ticket identity: task id \`$ID\` maps to the imported tasks-axi ticket (\`source.key\` = \`id:$ID\`); comment and move that ticket, never create a duplicate.
+Move status at phase changes and close on completion. Message board: summary line first, deeper detail in the thread; ask on the board instead of fabricating context.
+EOF
+CREWBOARD_SECTION=${CREWBOARD_SECTION%$'\n'}
+
 if [ "$KIND" = scout ]; then
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
@@ -305,6 +317,8 @@ You are a crewmate: an autonomous worker agent managed by firstmate. Work on you
 {TASK}
 
 $HERDR_SECTION
+
+$CREWBOARD_SECTION
 
 # Setup
 You are in a disposable git worktree of $REPO, at a detached HEAD on a clean default branch.
@@ -414,6 +428,8 @@ You are a crewmate: an autonomous worker agent managed by firstmate. Work on you
 {TASK}
 
 $HERDR_SECTION
+
+$CREWBOARD_SECTION
 
 # Setup
 You are in a disposable git worktree of $REPO, at a detached HEAD on a clean default branch.
